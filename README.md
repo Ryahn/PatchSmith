@@ -105,6 +105,10 @@ Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **pytest** 
 
 `<version>` matches `patcher/version.py`. Download from the Actions run **Artifacts** list.
 
+### GitHub Releases
+
+Pushing a **semver tag** `v<version>` (for example `v0.1.0`) runs the same builds, then publishes a **[GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)** with the four binaries attached. The tag must match `__version__` in [`patcher/version.py`](patcher/version.py) (without the leading `v`), or the publish step fails.
+
 ## Licenses (third-party binaries)
 
 - **xdelta:** This project may ship binaries built from the GPL lineage or the Apache-licensed fork. Read [xdelta-gpl `release3_1` README](https://github.com/jmacd/xdelta-gpl/blob/release3_1/README.md) and [jmacd/xdelta](http://github.com/jmacd/xdelta) and document which lineage your shipped `xdelta3` matches.
