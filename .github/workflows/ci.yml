@@ -40,6 +40,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          V=$(python -c "import runpy; print(runpy.run_path('patcher/version.py')['__version__'])")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
       - name: Install build deps
         run: |
           python -m pip install --upgrade pip
@@ -54,14 +61,14 @@ jobs:
       - name: Upload ApplyPatch (Windows)
         uses: actions/upload-artifact@v4
         with:
-          name: ApplyPatch-Windows
-          path: dist/ApplyPatch.exe
+          name: ApplyPatch-${{ steps.ver.outputs.version }}-Windows
+          path: dist/ApplyPatch-${{ steps.ver.outputs.version }}.exe
 
       - name: Upload PatchSmith (Windows)
         uses: actions/upload-artifact@v4
         with:
-          name: PatchSmith-Windows
-          path: dist/PatchSmith.exe
+          name: PatchSmith-${{ steps.ver.outputs.version }}-Windows
+          path: dist/PatchSmith-${{ steps.ver.outputs.version }}.exe
 
   build-linux:
     needs: test
@@ -72,6 +79,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          V=$(python -c "import runpy; print(runpy.run_path('patcher/version.py')['__version__'])")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: Install p7zip, 7za-linux, and Qt libs for PySide6
         run: |
@@ -97,11 +111,11 @@ jobs:
       - name: Upload ApplyPatch (Linux)
         uses: actions/upload-artifact@v4
         with:
-          name: ApplyPatch-Linux
-          path: dist/ApplyPatch
+          name: ApplyPatch-${{ steps.ver.outputs.version }}-Linux
+          path: dist/ApplyPatch-${{ steps.ver.outputs.version }}
 
       - name: Upload PatchSmith (Linux)
         uses: actions/upload-artifact@v4
         with:
-          name: PatchSmith-Linux
-          path: dist/PatchSmith
+          name: PatchSmith-${{ steps.ver.outputs.version }}-Linux
+          path: dist/PatchSmith-${{ steps.ver.outputs.version }}

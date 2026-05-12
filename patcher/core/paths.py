@@ -6,15 +6,14 @@ import os
 import sys
 from pathlib import Path
 
-PORTABLE_APPLY_EXE_NAME = "ApplyPatch.exe"
-PORTABLE_APPLY_LINUX_NAME = "ApplyPatch"
+from patcher.version import __version__
 
 
 def portable_apply_bundle_name() -> str:
     """Filename of the frozen portable apply binary for this OS (at patch root)."""
     if sys.platform == "win32":
-        return PORTABLE_APPLY_EXE_NAME
-    return PORTABLE_APPLY_LINUX_NAME
+        return f"ApplyPatch-{__version__}.exe"
+    return f"ApplyPatch-{__version__}"
 
 
 def _meipass_dir() -> Path | None:
@@ -47,8 +46,8 @@ def patch_tools_dir(patch_root: Path) -> Path:
 
 def portable_apply_patch_root() -> Path:
     """
-    Directory containing patch_manifest.json for the frozen ApplyPatch.exe
-    (exe parent), or PATCHSMITH_PATCH_ROOT / cwd when running from source.
+    Directory containing patch_manifest.json for the frozen portable apply binary
+    (executable's parent directory), or PATCHSMITH_PATCH_ROOT / cwd when running from source.
     """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent

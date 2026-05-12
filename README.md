@@ -2,6 +2,10 @@
 
 Windows-first desktop app (Python + PySide6) to **create** and **apply** game-style folder patches: compare two game trees, emit a JSON manifest (SHA256 + xdelta or full-file copies), optionally archive with **7-Zip** (`7za`), and apply with pre/post hash checks and optional backup.
 
+## Version
+
+The release string is defined once in [`patcher/version.py`](patcher/version.py) as `__version__` (also available as `patcher.__version__`). PyInstaller outputs **`PatchSmith-<version>.exe`** / **`ApplyPatch-<version>.exe`** on Windows and **`PatchSmith-<version>`** / **`ApplyPatch-<version>`** on Linux. **Create Patch → Include portable apply tool** copies the matching file from `bin/` next to `patch_manifest.json`.
+
 ## Requirements
 
 - Python 3.10+
@@ -41,8 +45,8 @@ python -m patcher.apply_portable   # dev: set PATCHSMITH_PATCH_ROOT to a patch f
 ```
 YourPatch/
   patch_manifest.json
-  ApplyPatch.exe      # Windows: optional portable apply tool
-  ApplyPatch            # Linux: optional portable apply binary (same role)
+  ApplyPatch-<version>.exe   # Windows portable apply (name includes semver)
+  ApplyPatch-<version>       # Linux portable apply
   patch_files/
     changed/          # .xdelta or full-file replacements
     new/              # new files
@@ -62,7 +66,7 @@ Ship a **small frozen apply-only program** next to `patch_manifest.json` so play
    pyinstaller --noconfirm packaging/apply_patch.spec
    ```
 
-2. Copy `dist/ApplyPatch.exe` to **`bin/ApplyPatch.exe`**. In **Create Patch**, enable **Include portable apply tool** so it is copied next to the manifest (and into `.7z` / `.zip` if used).
+2. Copy **`dist/ApplyPatch-<version>.exe`** to **`bin/ApplyPatch-<version>.exe`** (same `<version>` as in `patcher/version.py`). In **Create Patch**, enable **Include portable apply tool** so it is copied next to the manifest (and into `.7z` / `.zip` if used).
 
 ### Linux
 
@@ -74,7 +78,7 @@ Ship a **small frozen apply-only program** next to `patch_manifest.json` so play
    pyinstaller --noconfirm packaging/apply_patch_linux.spec
    ```
 
-3. Copy `dist/ApplyPatch` to **`bin/ApplyPatch`** and mark executable (`chmod +x bin/ApplyPatch`). Enable **Include portable apply tool** in Create Patch to copy `bin/ApplyPatch` into the patch folder.
+3. Copy **`dist/ApplyPatch-<version>`** to **`bin/ApplyPatch-<version>`** and mark executable (`chmod +x "bin/ApplyPatch-<version>"`). Enable **Include portable apply tool** in Create Patch to copy that file into the patch folder.
 
 **Developer testing** without freezing:
 
@@ -92,14 +96,14 @@ One-file builds extract to a temp folder on each launch (short delay). For faste
 
 Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **pytest** on **Windows** and **Ubuntu**, then builds:
 
-| Artifact | OS | Notes |
-|----------|-----|--------|
-| `ApplyPatch-Windows` | Windows | `pyinstaller packaging/apply_patch.spec` |
-| `ApplyPatch-Linux` | Ubuntu | Prepares `bin/7za-linux` from `p7zip-full`, then `pyinstaller packaging/apply_patch_linux.spec` |
-| `PatchSmith-Windows` | Windows | `packaging/patchsmith_windows.spec` |
-| `PatchSmith-Linux` | Ubuntu | `packaging/patchsmith_linux.spec` |
+| Artifact name | OS | PyInstaller output (under `dist/`) |
+|---------------|-----|-------------------------------------|
+| `ApplyPatch-<version>-Windows` | Windows | `ApplyPatch-<version>.exe` |
+| `ApplyPatch-<version>-Linux` | Ubuntu | `ApplyPatch-<version>` (ELF) |
+| `PatchSmith-<version>-Windows` | Windows | `PatchSmith-<version>.exe` |
+| `PatchSmith-<version>-Linux` | Ubuntu | `PatchSmith-<version>` (ELF) |
 
-Download artifacts from the Actions run summary after a successful build.
+`<version>` matches `patcher/version.py`. Download from the Actions run **Artifacts** list.
 
 ## Licenses (third-party binaries)
 

@@ -1,9 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec: PatchSmith main GUI (Windows, windowed)."""
 
+import runpy
 from pathlib import Path
 
 REPO = Path(SPECPATH).resolve().parent
+VERSION = runpy.run_path(str(REPO / "patcher" / "version.py"))["__version__"]
 
 block_cipher = None
 
@@ -29,7 +31,7 @@ a = Analysis(
         "patcher.core.differ",
         "patcher.engines.detect",
         "patcher.engines.generic",
-        "patcher.platform_check",
+        "patcher.version",
     ],
     hookspath=[],
     hooksconfig={},
@@ -50,7 +52,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="PatchSmith",
+    name=f"PatchSmith-{VERSION}",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

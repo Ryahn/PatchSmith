@@ -32,6 +32,7 @@ from patcher.core.create_patch import CreatePatchOptions, create_patch
 from patcher.core.paths import portable_apply_bundle_name
 from patcher.engines.detect import Engine, detect_engine, ignore_overrides_for_engine
 from patcher.platform_check import tool_warning_messages
+from patcher.version import __version__
 
 
 class _CreateWorker(QThread):
@@ -77,7 +78,7 @@ class _ApplyWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("PatchSmith")
+        self.setWindowTitle(f"PatchSmith {__version__}")
         self.resize(920, 640)
 
         self._create_worker: _CreateWorker | None = None

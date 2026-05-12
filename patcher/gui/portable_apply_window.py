@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from patcher.core.apply_patch import ApplyPatchOptions, apply_patch
 from patcher.core.paths import portable_apply_patch_root
+from patcher.version import __version__
 
 
 class _PortableApplyWorker(QThread):
@@ -53,7 +54,7 @@ class PortableApplyWindow(QMainWindow):
         self._patch_root = portable_apply_patch_root()
         self._worker: _PortableApplyWorker | None = None
 
-        self.setWindowTitle("Apply patch")
+        self.setWindowTitle(f"Apply patch {__version__}")
         self.resize(640, 480)
 
         central = QWidget()
@@ -64,7 +65,7 @@ class PortableApplyWindow(QMainWindow):
             layout.addWidget(
                 QLabel(
                     "patch_manifest.json was not found next to this program.\n"
-                    "Keep ApplyPatch.exe in the patch folder (same folder as the manifest).\n"
+                    "Keep this apply tool in the patch folder (same folder as the manifest).\n"
                     f"Looked in:\n{self._patch_root}"
                 )
             )

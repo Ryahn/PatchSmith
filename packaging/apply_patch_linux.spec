@@ -4,9 +4,11 @@
 Expects repo bin/xdelta3-linux and bin/7za-linux (e.g. copy from p7zip-full in CI).
 """
 
+import runpy
 from pathlib import Path
 
 REPO = Path(SPECPATH).resolve().parent
+VERSION = runpy.run_path(str(REPO / "patcher" / "version.py"))["__version__"]
 
 block_cipher = None
 
@@ -25,6 +27,7 @@ a = Analysis(
         "patcher.core.manifest",
         "patcher.core.paths",
         "patcher.core.xdelta",
+        "patcher.version",
     ],
     hookspath=[],
     hooksconfig={},
@@ -45,7 +48,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="ApplyPatch",
+    name=f"ApplyPatch-{VERSION}",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
