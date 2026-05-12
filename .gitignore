@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+bin/ApplyPatch.exe
 bin/ApplyPatch-*.exe
 bin/ApplyPatch-*
 bin/7za-linux
