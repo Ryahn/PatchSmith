@@ -1,0 +1,8 @@
+/build/
+/dist/
+*.spec.bak
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+bin/ApplyPatch.exe
