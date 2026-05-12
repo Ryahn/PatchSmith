@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a problem with PatchSmith (create or apply flow).
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill in each section. Redact paths or filenames you do not want public.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: OS and PatchSmith version / commit
+      description: |
+        Example: Windows 11 24H2, PatchSmith **0.1.0** from GitHub Releases — or **from source** (branch + date **YYYY-MM-DD**, or commit SHA).
+      placeholder: OS … PatchSmith version or commit …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Creating or applying a patch?
+      description: Which flow were you in when this happened?
+      options:
+        - Creating a patch
+        - Applying a patch
+        - Both / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: paths_and_error
+    attributes:
+      label: Paths (redacted if needed) and first error line
+      description: |
+        Include enough path context to reproduce (redact as needed). Paste the **first** error line from the log, console, or UI message.
+      placeholder: "Paths: …\nFirst error line: …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: xdelta3_discovery
+    attributes:
+      label: xdelta3 — how was it resolved?
+      description: Found automatically (bundled / `bin/` / `PATH`), or via **`PATCHSMITH_XDELTA3`**, or unknown / error finding it.
+      placeholder: e.g. Automatic from bundled tools / set PATCHSMITH_XDELTA3=…
+    validations:
+      required: true
+
+  - type: textarea
+    id: sevenza_discovery
+    attributes:
+      label: 7za — how was it resolved?
+      description: Found automatically (bundled / `bin/` / `PATH`), or via **`PATCHSMITH_7ZA`**, or unknown / error finding it.
+      placeholder: e.g. Automatic / set PATCHSMITH_7ZA=…
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce (optional)
+      description: Ordered steps from launch to failure.
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context (optional)
+      description: Screenshots, manifest snippet (redacted), full log in a gist link, etc.
+    validations:
+      required: false
