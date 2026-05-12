@@ -11,7 +11,7 @@ from pathlib import Path
 from patcher.core import archiver, hasher, xdelta
 from patcher.core.differ import diff_trees
 from patcher.core.manifest import ManifestFileEntry, PatchManifest
-from patcher.core.paths import PORTABLE_APPLY_EXE_NAME, bin_dir, patch_tools_dir, repo_root
+from patcher.core.paths import bin_dir, patch_tools_dir, portable_apply_bundle_name, repo_root
 from patcher.core.scanner import iter_files
 
 
@@ -217,17 +217,20 @@ def create_patch(opts: CreatePatchOptions, log: LogFn | None = None) -> Path | N
     manifest.save(out_dir / "patch_manifest.json")
     log(f"Wrote manifest ({len(manifest_files)} file entries).")
 
-    if opts.bundle_portable_apply and _is_windows():
-        src = repo_root() / "bin" / PORTABLE_APPLY_EXE_NAME
-        dst = out_dir / PORTABLE_APPLY_EXE_NAME
+    if opts.bundle_portable_apply:
+        bundle_name = portable_apply_bundle_name()
+        src = repo_root() / "bin" / bundle_name
+        dst = out_dir / bundle_name
         if src.is_file():
             shutil.copy2(src, dst)
-            log(f"Included portable apply tool: {PORTABLE_APPLY_EXE_NAME}")
+            if _is_linux():
+                dst.chmod(dst.stat().st_mode | 0o111)
+            log(f"Included portable apply tool: {bundle_name}")
         else:
             log(
-                f"Warning: {PORTABLE_APPLY_EXE_NAME} not found at {src}. "
-                "Build it with PyInstaller (see README packaging/apply_patch.spec) "
-                f"and copy the output to bin/{PORTABLE_APPLY_EXE_NAME}."
+                f"Warning: portable apply tool not found at {src}. "
+                "Build it with PyInstaller (see README / .github/workflows) "
+                f"and copy the output to bin/{bundle_name}."
             )
 
     if opts.bundle_tools:
@@ -249,6 +252,11 @@ def create_patch(opts: CreatePatchOptions, log: LogFn | None = None) -> Path | N
                 shutil.copy2(src, tools / "xdelta3")
                 (tools / "xdelta3").chmod(0o755)
                 log("Bundled tool: xdelta3")
+            z7 = b / "7za-linux"
+            if z7.is_file():
+                shutil.copy2(z7, tools / "7za")
+                (tools / "7za").chmod(0o755)
+                log("Bundled tool: 7za")
 
     archive_path: Path | None = None
     if opts.bundle_archive:

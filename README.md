@@ -14,6 +14,7 @@ Windows-first desktop app (Python + PySide6) to **create** and **apply** game-st
 | `xdelta-3.1.0-x86_64.exe` | xdelta3 CLI on Windows |
 | `xdelta3-linux` | xdelta3 CLI on Linux (optional) |
 | `7za.exe` | 7-Zip standalone CLI on Windows |
+| `7za-linux` | Optional: Linux `7za` binary placed in `bin/` for bundling / PyInstaller (e.g. copy from `p7zip-full`); not committed by default |
 
 PatchSmith resolves tools in this order: `PATCHSMITH_XDELTA3` / `PATCHSMITH_7ZA` → repo `bin/` (or PyInstaller bundle) → patch folder `tools/` → `PATH`.
 
@@ -40,7 +41,8 @@ python -m patcher.apply_portable   # dev: set PATCHSMITH_PATCH_ROOT to a patch f
 ```
 YourPatch/
   patch_manifest.json
-  ApplyPatch.exe      # optional: portable apply tool (see below)
+  ApplyPatch.exe      # Windows: optional portable apply tool
+  ApplyPatch            # Linux: optional portable apply binary (same role)
   patch_files/
     changed/          # .xdelta or full-file replacements
     new/              # new files
@@ -48,30 +50,56 @@ YourPatch/
   tools/              # optional portable xdelta3 / 7za
 ```
 
-## Portable `ApplyPatch.exe` (Windows end users)
+## Portable apply tool (Windows / Linux)
 
-You can ship a **small frozen apply-only program** next to `patch_manifest.json` so players do not need the full PatchSmith app.
+Ship a **small frozen apply-only program** next to `patch_manifest.json` so players do not need the full PatchSmith app.
 
-1. **Build** the one-file executable (from repo root, after `pip install -r requirements-dev.txt`):
+### Windows
+
+1. Build (repo root, after `pip install -r requirements-dev.txt`):
 
    ```bash
    pyinstaller --noconfirm packaging/apply_patch.spec
    ```
 
-   Output: `dist/ApplyPatch.exe` (embeds PySide6, Python runtime, and copies of `bin/xdelta-3.1.0-x86_64.exe` and `bin/7za.exe` from your repo).
+2. Copy `dist/ApplyPatch.exe` to **`bin/ApplyPatch.exe`**. In **Create Patch**, enable **Include portable apply tool** so it is copied next to the manifest (and into `.7z` / `.zip` if used).
 
-2. **Publish for patch authors:** copy `dist/ApplyPatch.exe` to **`bin/ApplyPatch.exe`** in this repository (or keep it elsewhere and copy when packaging). In **Create Patch**, enable **“Include portable apply tool (ApplyPatch.exe) for end users”** so the file is copied into the patch folder **before** any archive step.
+### Linux
 
-3. **End user layout:** keep `ApplyPatch.exe` in the **same folder** as `patch_manifest.json`. Double-click it, choose the game folder, click **Apply patch**.
+1. Provide **`bin/7za-linux`** (e.g. `cp "$(command -v 7za)" bin/7za-linux` after installing `p7zip-full`) next to the existing **`bin/xdelta3-linux`**.
 
-4. **Developer testing** of the UI without freezing:
+2. Build:
 
    ```bash
-   set PATCHSMITH_PATCH_ROOT=C:\path\to\existing\patch\folder
-   python -m patcher.apply_portable
+   pyinstaller --noconfirm packaging/apply_patch_linux.spec
    ```
 
+3. Copy `dist/ApplyPatch` to **`bin/ApplyPatch`** and mark executable (`chmod +x bin/ApplyPatch`). Enable **Include portable apply tool** in Create Patch to copy `bin/ApplyPatch` into the patch folder.
+
+**Developer testing** without freezing:
+
+```bash
+# Windows CMD
+set PATCHSMITH_PATCH_ROOT=C:\path\to\patch && python -m patcher.apply_portable
+
+# Linux/macOS
+export PATCHSMITH_PATCH_ROOT=/path/to/patch && python -m patcher.apply_portable
+```
+
 One-file builds extract to a temp folder on each launch (short delay). For faster cold start, switch the spec to onedir (`COLLECT`) at the cost of many files beside the manifest.
+
+## GitHub Actions
+
+Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **pytest** on **Windows** and **Ubuntu**, then builds:
+
+| Artifact | OS | Notes |
+|----------|-----|--------|
+| `ApplyPatch-Windows` | Windows | `pyinstaller packaging/apply_patch.spec` |
+| `ApplyPatch-Linux` | Ubuntu | Prepares `bin/7za-linux` from `p7zip-full`, then `pyinstaller packaging/apply_patch_linux.spec` |
+| `PatchSmith-Windows` | Windows | `packaging/patchsmith_windows.spec` |
+| `PatchSmith-Linux` | Ubuntu | `packaging/patchsmith_linux.spec` |
+
+Download artifacts from the Actions run summary after a successful build.
 
 ## Licenses (third-party binaries)
 
@@ -80,8 +108,8 @@ One-file builds extract to a temp folder on each launch (short delay). For faste
 
 ## PyInstaller (optional)
 
-- **Full app:** bundle `bin/xdelta-3.1.0-x86_64.exe` and `bin/7za.exe` as data files and point `PATCHSMITH_*` resolution at `_MEIPASS` or the folder next to the frozen executable (see `patcher.core.xdelta` / `archiver`).
-- **Portable apply only:** use [`packaging/apply_patch.spec`](packaging/apply_patch.spec) (see **Portable `ApplyPatch.exe`** above).
+- **Full app:** [`packaging/patchsmith_windows.spec`](packaging/patchsmith_windows.spec) / [`packaging/patchsmith_linux.spec`](packaging/patchsmith_linux.spec) bundle `bin/` tools into `_MEIPASS` (see `patcher.core.xdelta` / `archiver`).
+- **Portable apply only:** Windows — [`packaging/apply_patch.spec`](packaging/apply_patch.spec); Linux — [`packaging/apply_patch_linux.spec`](packaging/apply_patch_linux.spec).
 
 ## Manifest (sketch)
 

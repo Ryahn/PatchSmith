@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from patcher.core.apply_patch import ApplyPatchOptions, apply_patch
 from patcher.core.create_patch import CreatePatchOptions, create_patch
-from patcher.core.paths import PORTABLE_APPLY_EXE_NAME
+from patcher.core.paths import portable_apply_bundle_name
 from patcher.engines.detect import Engine, detect_engine, ignore_overrides_for_engine
 from patcher.platform_check import tool_warning_messages
 
@@ -194,15 +194,14 @@ class MainWindow(QMainWindow):
         form.addRow(self._c_tools)
 
         self._c_portable_apply = QCheckBox(
-            f"Include portable apply tool ({PORTABLE_APPLY_EXE_NAME}) for end users"
+            f"Include portable apply tool ({portable_apply_bundle_name()}) for end users"
         )
         self._c_portable_apply.setToolTip(
-            f"When checked, copies repo bin/{PORTABLE_APPLY_EXE_NAME} into the patch folder "
-            "(next to patch_manifest.json). Build that exe first with PyInstaller; see README."
+            "When checked, copies the pre-built portable apply binary from repo bin/ "
+            "next to patch_manifest.json. Build with PyInstaller (see README and CI workflows)."
         )
         self._c_portable_apply.setChecked(False)
-        if sys.platform != "win32":
-            self._c_portable_apply.setEnabled(False)
+        self._c_portable_apply.setEnabled(sys.platform in ("win32", "linux"))
         form.addRow(self._c_portable_apply)
 
         self._c_overwrite = QCheckBox("Overwrite output folder if it exists")

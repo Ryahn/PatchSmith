@@ -39,6 +39,12 @@ def resolve_7za(*, patch_root: Path | None = None) -> Path:
         if exe.is_file():
             return exe.resolve()
 
+    if sys.platform.startswith("linux"):
+        for name in ("7za-linux", "7za"):
+            p = bin_dir() / name
+            if p.is_file():
+                return p.resolve()
+
     if patch_root is not None:
         tools = patch_tools_dir(patch_root)
         for name in ("7za.exe", "7za"):

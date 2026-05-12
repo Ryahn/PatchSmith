@@ -7,6 +7,14 @@ import sys
 from pathlib import Path
 
 PORTABLE_APPLY_EXE_NAME = "ApplyPatch.exe"
+PORTABLE_APPLY_LINUX_NAME = "ApplyPatch"
+
+
+def portable_apply_bundle_name() -> str:
+    """Filename of the frozen portable apply binary for this OS (at patch root)."""
+    if sys.platform == "win32":
+        return PORTABLE_APPLY_EXE_NAME
+    return PORTABLE_APPLY_LINUX_NAME
 
 
 def _meipass_dir() -> Path | None:
