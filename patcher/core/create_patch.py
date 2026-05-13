@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -54,6 +55,8 @@ class CreatePatchOptions:
     """If > 0, prompt before xdelta when any planned job is ≥ this many MiB (GUI only passes a confirm fn)."""
     large_xdelta_warn_mb: float = 500.0
     confirm_large_xdelta: ConfirmLargeXdeltaFn | None = None
+    # Active xdelta Popen while running, then None when finished (GUI kills child on app exit).
+    on_xdelta_subprocess: Callable[[subprocess.Popen | None], None] | None = None
     track_deletes: bool = True
     bundle_archive: bool = False
     archive_format: str = "7z"
@@ -182,6 +185,7 @@ def create_patch(opts: CreatePatchOptions, log: LogFn | None = None) -> Path | N
                 compression_level=opts.xdelta_compression_level,
                 progress_log=log,
                 progress_label=rel,
+                on_subprocess=opts.on_xdelta_subprocess,
             )
             manifest_files.append(
                 ManifestFileEntry(

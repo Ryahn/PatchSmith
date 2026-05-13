@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import sys
+import subprocess
 from pathlib import Path
 
 from dataclasses import replace
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QCloseEvent, QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -48,9 +49,22 @@ class _CreateWorker(QThread):
         super().__init__()
         self._opts = opts
         self._confirm_reply = False
+        self._active_xdelta: subprocess.Popen | None = None
 
     def set_confirm_reply(self, ok: bool) -> None:
         self._confirm_reply = ok
+
+    def _track_xdelta_subprocess(self, proc: subprocess.Popen | None) -> None:
+        self._active_xdelta = proc
+
+    def kill_active_xdelta_child(self) -> None:
+        p = self._active_xdelta
+        if p is None or p.poll() is not None:
+            return
+        try:
+            p.kill()
+        except OSError:
+            pass
 
     def _ask_confirm_large_xdelta(self, msg: str) -> bool:
         self.need_confirm.emit(msg)
@@ -62,8 +76,10 @@ class _CreateWorker(QThread):
 
         try:
             opts = self._opts
+            patches: dict[str, object] = {"on_xdelta_subprocess": self._track_xdelta_subprocess}
             if opts.large_xdelta_warn_mb > 0:
-                opts = replace(opts, confirm_large_xdelta=self._ask_confirm_large_xdelta)
+                patches["confirm_large_xdelta"] = self._ask_confirm_large_xdelta
+            opts = replace(opts, **patches)
             archive = create_patch(opts, log=log)
             self.finished_ok.emit(archive)
         except UserCancelledError:
@@ -80,13 +96,27 @@ class _ApplyWorker(QThread):
     def __init__(self, opts: ApplyPatchOptions) -> None:
         super().__init__()
         self._opts = opts
+        self._active_xdelta: subprocess.Popen | None = None
+
+    def _track_xdelta_subprocess(self, proc: subprocess.Popen | None) -> None:
+        self._active_xdelta = proc
+
+    def kill_active_xdelta_child(self) -> None:
+        p = self._active_xdelta
+        if p is None or p.poll() is not None:
+            return
+        try:
+            p.kill()
+        except OSError:
+            pass
 
     def run(self) -> None:
         def log(s: str) -> None:
             self.log_line.emit(s)
 
         try:
-            apply_patch(self._opts, log=log)
+            opts = replace(self._opts, on_xdelta_subprocess=self._track_xdelta_subprocess)
+            apply_patch(opts, log=log)
             self.finished_ok.emit()
         except Exception as e:
             self.failed.emit(str(e))
@@ -107,6 +137,18 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(tabs)
 
         self._maybe_warn_tools()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        for w in (self._create_worker, self._apply_worker):
+            if w is None or not w.isRunning():
+                continue
+            w.blockSignals(True)
+            p = getattr(w, "_active_xdelta", None)
+            had_live_xdelta = p is not None and p.poll() is None
+            w.kill_active_xdelta_child()
+            if had_live_xdelta:
+                w.wait(10_000)
+        super().closeEvent(event)
 
     def _append_log(self, text: str) -> None:
         self._log.moveCursor(QTextCursor.MoveOperation.End)

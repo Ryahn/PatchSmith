@@ -13,6 +13,8 @@ from pathlib import Path
 
 from patcher.core.paths import bin_dir, patch_tools_dir
 
+OnXdeltaSubprocessFn = Callable[[subprocess.Popen | None], None]
+
 
 class XdeltaNotFoundError(FileNotFoundError):
     pass
@@ -83,6 +85,7 @@ def encode(
     compression_level: int = 6,
     progress_log: Callable[[str], None] | None = None,
     progress_label: str | None = None,
+    on_subprocess: OnXdeltaSubprocessFn | None = None,
 ) -> None:
     patch_out.parent.mkdir(parents=True, exist_ok=True)
     lev = max(1, min(9, int(compression_level)))
@@ -121,18 +124,28 @@ def encode(
                 except Exception:
                     pass
 
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    hb = threading.Thread(target=_heartbeat, daemon=True)
-    hb.start()
+    proc: subprocess.Popen | None = None
+    out, err = "", ""
     try:
-        out, err = proc.communicate()
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if on_subprocess is not None:
+            on_subprocess(proc)
+        hb = threading.Thread(target=_heartbeat, daemon=True)
+        hb.start()
+        try:
+            out, err = proc.communicate()
+        finally:
+            done.set()
     finally:
-        done.set()
+        if on_subprocess is not None:
+            on_subprocess(None)
+    if proc is None:
+        raise RuntimeError("xdelta3 encode failed to start subprocess")
     if proc.returncode != 0:
         msg = ((err or "") + (out or "")).strip() or f"exit {proc.returncode}"
         raise RuntimeError(f"xdelta3 encode failed: {msg}")
@@ -143,6 +156,8 @@ def decode(
     old_file: Path,
     patch_file: Path,
     new_out: Path,
+    *,
+    on_subprocess: OnXdeltaSubprocessFn | None = None,
 ) -> None:
     new_out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -153,8 +168,23 @@ def decode(
         str(patch_file),
         str(new_out),
     ]
+    proc: subprocess.Popen | None = None
+    out, err = "", ""
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        err = (e.stderr or e.stdout or str(e)).strip()
-        raise RuntimeError(f"xdelta3 decode failed: {err}") from e
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if on_subprocess is not None:
+            on_subprocess(proc)
+        out, err = proc.communicate()
+    finally:
+        if on_subprocess is not None:
+            on_subprocess(None)
+    if proc is None:
+        raise RuntimeError("xdelta3 decode failed to start subprocess")
+    if proc.returncode != 0:
+        msg = ((err or "") + (out or "")).strip() or f"exit {proc.returncode}"
+        raise RuntimeError(f"xdelta3 decode failed: {msg}")

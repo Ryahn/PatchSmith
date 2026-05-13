@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,7 @@ class ApplyPatchOptions:
     patch_path: Path
     backup: bool = True
     backup_dir: Path | None = None
+    on_xdelta_subprocess: Callable[[subprocess.Popen | None], None] | None = None
 
 
 def apply_patch(opts: ApplyPatchOptions, log: LogFn | None = None) -> None:
@@ -135,7 +137,7 @@ def apply_patch(opts: ApplyPatchOptions, log: LogFn | None = None) -> None:
                 target = _game_path(game_root, entry.path)
                 tmp = target.with_name(target.name + ".patchsmith.tmp")
                 log(f"xdelta decode: {entry.path}")
-                xdelta.decode(xdelta_exe, old_file, patch_file, tmp)
+                xdelta.decode(xdelta_exe, old_file, patch_file, tmp, on_subprocess=opts.on_xdelta_subprocess)
                 h, _ = hasher.sha256_file(tmp)
                 if h != entry.new_sha256:
                     tmp.unlink(missing_ok=True)
