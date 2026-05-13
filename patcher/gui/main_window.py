@@ -5,7 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+from dataclasses import replace
+
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -28,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from patcher.core.apply_patch import ApplyPatchOptions, apply_patch
-from patcher.core.create_patch import CreatePatchOptions, create_patch
+from patcher.core.create_patch import CreatePatchOptions, UserCancelledError, create_patch
 from patcher.core.paths import portable_apply_bundle_name
 from patcher.engines.detect import Engine, detect_engine, ignore_overrides_for_engine
 from patcher.platform_check import tool_warning_messages
@@ -39,18 +41,33 @@ class _CreateWorker(QThread):
     log_line = Signal(str)
     finished_ok = Signal(object)
     failed = Signal(str)
+    cancelled = Signal()
+    need_confirm = Signal(str)
 
     def __init__(self, opts: CreatePatchOptions) -> None:
         super().__init__()
         self._opts = opts
+        self._confirm_reply = False
+
+    def set_confirm_reply(self, ok: bool) -> None:
+        self._confirm_reply = ok
+
+    def _ask_confirm_large_xdelta(self, msg: str) -> bool:
+        self.need_confirm.emit(msg)
+        return self._confirm_reply
 
     def run(self) -> None:
         def log(s: str) -> None:
             self.log_line.emit(s)
 
         try:
-            archive = create_patch(self._opts, log=log)
+            opts = self._opts
+            if opts.large_xdelta_warn_mb > 0:
+                opts = replace(opts, confirm_large_xdelta=self._ask_confirm_large_xdelta)
+            archive = create_patch(opts, log=log)
             self.finished_ok.emit(archive)
+        except UserCancelledError:
+            self.cancelled.emit()
         except Exception as e:
             self.failed.emit(str(e))
 
@@ -163,6 +180,26 @@ class MainWindow(QMainWindow):
         self._c_threshold.setValue(50.0)
         self._c_threshold.setSuffix(" MB")
         form.addRow("xdelta threshold (changed files ≥ this use xdelta)", self._c_threshold)
+
+        self._c_xdelta_level = QSpinBox()
+        self._c_xdelta_level.setRange(1, 9)
+        self._c_xdelta_level.setValue(6)
+        self._c_xdelta_level.setToolTip(
+            "xdelta3 secondary compression: 1 = faster encode, larger .xdelta files; "
+            "9 = slowest, smallest. Large games (multi‑GB) differ a lot in wall time."
+        )
+        form.addRow("xdelta compression (1–9)", self._c_xdelta_level)
+
+        self._c_xdelta_warn_mb = QSpinBox()
+        self._c_xdelta_warn_mb.setRange(0, 500_000)
+        self._c_xdelta_warn_mb.setValue(500)
+        self._c_xdelta_warn_mb.setSuffix(" MiB")
+        self._c_xdelta_warn_mb.setSpecialValueText("off")
+        self._c_xdelta_warn_mb.setToolTip(
+            "Before encoding, warn if any file that will use xdelta is at least this large. "
+            "Set to 0 MiB to disable the prompt."
+        )
+        form.addRow("Warn before xdelta if file ≥", self._c_xdelta_warn_mb)
 
         self._c_preset = QComboBox()
         self._c_preset.addItem("Generic", "generic")
@@ -300,6 +337,7 @@ class MainWindow(QMainWindow):
         engine = self._engine_for_create()
         ign_names, ign_prefixes = ignore_overrides_for_engine(engine)
 
+        warn_mb = float(self._c_xdelta_warn_mb.value())
         opts = CreatePatchOptions(
             old_root=Path(old),
             new_root=Path(new),
@@ -308,6 +346,8 @@ class MainWindow(QMainWindow):
             from_version=self._c_from.text().strip(),
             to_version=self._c_to.text().strip(),
             xdelta_threshold_mb=float(self._c_threshold.value()),
+            xdelta_compression_level=int(self._c_xdelta_level.value()),
+            large_xdelta_warn_mb=warn_mb,
             track_deletes=self._c_track_del.isChecked(),
             bundle_archive=self._c_archive.isChecked(),
             archive_format=self._c_fmt.currentData(),
@@ -325,6 +365,11 @@ class MainWindow(QMainWindow):
         self._create_worker.log_line.connect(self._append_log)
         self._create_worker.finished_ok.connect(self._on_create_done)
         self._create_worker.failed.connect(self._on_create_fail)
+        self._create_worker.cancelled.connect(self._on_create_cancelled)
+        self._create_worker.need_confirm.connect(
+            self._on_create_need_confirm,
+            Qt.ConnectionType.BlockingQueuedConnection,
+        )
         self._create_worker.start()
 
     def _on_create_done(self, archive: object) -> None:
@@ -340,6 +385,25 @@ class MainWindow(QMainWindow):
         self._c_start.setEnabled(True)
         self._append_log(f"ERROR: {msg}")
         QMessageBox.critical(self, "PatchSmith", msg)
+
+    def _on_create_cancelled(self) -> None:
+        self._c_start.setEnabled(True)
+        self._append_log("Cancelled.")
+
+    def _on_create_need_confirm(self, msg: str) -> None:
+        if not self._create_worker:
+            return
+        ok = (
+            QMessageBox.question(
+                self,
+                "PatchSmith — large xdelta jobs",
+                msg,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            == QMessageBox.StandardButton.Yes
+        )
+        self._create_worker.set_confirm_reply(ok)
 
     def _on_apply_start(self) -> None:
         if self._apply_worker and self._apply_worker.isRunning():

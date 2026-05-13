@@ -6,6 +6,9 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from patcher.core.paths import bin_dir, patch_tools_dir
@@ -76,12 +79,17 @@ def encode(
     old_file: Path,
     new_file: Path,
     patch_out: Path,
+    *,
+    compression_level: int = 6,
+    progress_log: Callable[[str], None] | None = None,
+    progress_label: str | None = None,
 ) -> None:
     patch_out.parent.mkdir(parents=True, exist_ok=True)
+    lev = max(1, min(9, int(compression_level)))
     cmd = [
         str(xdelta_exe),
         "-e",
-        "-9",
+        f"-{lev}",
         "-S",
         "djw",
         "-s",
@@ -89,11 +97,45 @@ def encode(
         str(new_file),
         str(patch_out),
     ]
+    done = threading.Event()
+    start_mono = time.monotonic()
+
+    def _heartbeat() -> None:
+        while not done.wait(20.0):
+            if patch_out.is_file():
+                try:
+                    patch_part = patch_out.stat().st_size
+                except OSError:
+                    patch_part = -1
+            else:
+                patch_part = 0
+            elapsed = round(time.monotonic() - start_mono, 1)
+            if progress_log is not None:
+                label = progress_label or patch_out.name
+                mib = patch_part / (1024 * 1024) if patch_part >= 0 else 0.0
+                try:
+                    progress_log(
+                        f"  xdelta encoding {label}… {elapsed:.0f}s elapsed, "
+                        f"~{mib:.0f} MiB patch on disk so far"
+                    )
+                except Exception:
+                    pass
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    hb = threading.Thread(target=_heartbeat, daemon=True)
+    hb.start()
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        err = (e.stderr or e.stdout or str(e)).strip()
-        raise RuntimeError(f"xdelta3 encode failed: {err}") from e
+        out, err = proc.communicate()
+    finally:
+        done.set()
+    if proc.returncode != 0:
+        msg = ((err or "") + (out or "")).strip() or f"exit {proc.returncode}"
+        raise RuntimeError(f"xdelta3 encode failed: {msg}")
 
 
 def decode(

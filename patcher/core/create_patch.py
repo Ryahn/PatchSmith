@@ -16,6 +16,11 @@ from patcher.core.scanner import iter_files
 
 
 LogFn = Callable[[str], None]
+ConfirmLargeXdeltaFn = Callable[[str], bool]
+
+
+class UserCancelledError(Exception):
+    """Raised when the user aborts patch creation (e.g. large-xdelta confirmation)."""
 
 
 def _noop_log(_: str) -> None:
@@ -44,6 +49,11 @@ class CreatePatchOptions:
     from_version: str
     to_version: str
     xdelta_threshold_mb: float
+    """xdelta3 secondary compression 1–9 (higher = smaller deltas, slower)."""
+    xdelta_compression_level: int = 6
+    """If > 0, prompt before xdelta when any planned job is ≥ this many MiB (GUI only passes a confirm fn)."""
+    large_xdelta_warn_mb: float = 500.0
+    confirm_large_xdelta: ConfirmLargeXdeltaFn | None = None
     track_deletes: bool = True
     bundle_archive: bool = False
     archive_format: str = "7z"
@@ -120,7 +130,39 @@ def create_patch(opts: CreatePatchOptions, log: LogFn | None = None) -> Path | N
 
     xdelta_exe = xdelta.resolve_xdelta3(patch_root=None)
     threshold = _threshold_bytes(opts.xdelta_threshold_mb)
+    warn_b = _threshold_bytes(opts.large_xdelta_warn_mb) if opts.large_xdelta_warn_mb > 0 else 0
     manifest_files: list[ManifestFileEntry] = []
+
+    plan_xdelta: list[tuple[str, int, int]] = []
+    for rel in dr.changed:
+        old_h, old_sz = old_map[rel]
+        new_h, new_sz = new_map[rel]
+        max_sz = max(old_sz, new_sz)
+        if max_sz >= threshold:
+            plan_xdelta.append((rel, old_sz, new_sz))
+
+    if warn_b and plan_xdelta and opts.confirm_large_xdelta is not None:
+        big_jobs = [(rel, o, n) for rel, o, n in plan_xdelta if max(o, n) >= warn_b]
+        if big_jobs:
+            big_jobs.sort(key=lambda t: max(t[1], t[2]), reverse=True)
+            lines: list[str] = []
+            for rel, o, n in big_jobs[:25]:
+                mb = max(o, n) / (1024 * 1024)
+                lines.append(f"  • {rel}  (~{mb:.0f} MiB)")
+            more = ""
+            if len(big_jobs) > 25:
+                more = f"\n… and {len(big_jobs) - 25} more file(s)"
+            msg = (
+                f"{len(big_jobs)} changed file(s) are each ≥ {opts.large_xdelta_warn_mb:.0f} MiB and will be "
+                "encoded with xdelta3. Large jobs can take a long time and stress CPU and disk.\n\n"
+                "Largest files:\n"
+                + "\n".join(lines)
+                + more
+                + "\n\nContinue with patch creation?"
+            )
+            if not opts.confirm_large_xdelta(msg):
+                shutil.rmtree(out_dir)
+                raise UserCancelledError("Patch creation cancelled.")
 
     for rel in sorted(dr.changed):
         old_h, old_sz = old_map[rel]
@@ -137,6 +179,9 @@ def create_patch(opts: CreatePatchOptions, log: LogFn | None = None) -> Path | N
                 _game_path(old_root, rel),
                 _game_path(new_root, rel),
                 out_delta,
+                compression_level=opts.xdelta_compression_level,
+                progress_log=log,
+                progress_label=rel,
             )
             manifest_files.append(
                 ManifestFileEntry(
